@@ -1,6 +1,6 @@
 /* Guarda o app no aparelho para abrir rápido e funcionar sem internet.
    Os dados do GitHub nunca passam pelo cache. */
-var CACHE = "estrela-v4";
+var CACHE = "estrela-v5";
 var SHELL = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", function (e) {
