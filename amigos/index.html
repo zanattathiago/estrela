@@ -682,7 +682,7 @@ svg.star {
       var val = cur.j === "new" ? "" : it.text;
       var title = cur.j === "new" ? "Nova subtarefa" : val ? (isSub ? "Editar subtarefa" : "Editar tarefa") : "Nova tarefa";
       html = head + '<h2>' + title + '</h2>' +
-        '<form id="taskForm"><input id="taskInput" maxlength="60" autocomplete="off" placeholder="' + (isSub ? "Ex.: ver preço na farmácia" : "Ex.: fazer supermercado") + '" value="' + esc(val).replace(/"/g, "&quot;") + '">' +
+        '<form id="taskForm"><input id="taskInput" maxlength="60" autocomplete="off" placeholder="' + (isSub ? "Ex.: ver preço na farmácia" : "Ex.: Fazer supermercado") + '" value="' + esc(val).replace(/"/g, "&quot;") + '">' +
         '<div class="actions"><button class="btn ghost" type="button" data-a="cancel">Cancelar</button>' +
         '<button class="btn" type="submit">Salvar</button></div></form>';
     } else if (!isSub && mode === "ask" && s.subs.length) {
