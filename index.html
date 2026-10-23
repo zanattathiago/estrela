@@ -500,7 +500,7 @@ svg.star {
     var rg = el("path", { "class": "ring", d: RING, transform: tf });
     gCover.appendChild(cv); gRings.appendChild(rg);
     covers.push(cv); rings.push(rg);
-    var w = 80, h = 80, lr = R + 12;
+    var w = 80, h = 80, lr = R;
     var fo = el("foreignObject", { "class": "label", x: lr * Math.cos(ang) - w / 2, y: lr * Math.sin(ang) - h / 2, width: w, height: h });
     var div = document.createElement("div");
     fo.appendChild(div);
