@@ -192,7 +192,9 @@ h1 em { font-style: italic; font-weight: 400; color: var(--task); }
   color: var(--muted);
   text-align: center;
   min-height: 1.2em;
+  transition: opacity 1.5s ease;
 }
+.hint.out { opacity: 0; }
 
 /* Estrela */
 .star-wrap {
@@ -565,13 +567,21 @@ svg.star {
     if (!ticking && phase.some(Boolean)) { ticking = true; tick(); }
     document.getElementById("count").textContent = done;
     document.getElementById("complete").hidden = done < N;
-    var hint = "";
-    if (filled === 0) hint = "Toque num quadrado com + para escrever a primeira tarefa.";
-    else if (filled < N) hint = "Faltam " + (N - filled) + " quadrado" + (N - filled > 1 ? "s" : "") + " para preencher.";
-    else if (done < N) hint = "Toque numa tarefa quando ela estiver feita.";
-    document.getElementById("hint").textContent = hint;
+    setHint(filled === 0 ? "Toque em um quadrado para escrever a primeira tarefa." : done < N ? "Clique na tarefa para mais opções." : "");
     size();
     if (cur && mode !== "write") drawDialog(false);
+  }
+
+  /* Dica embaixo dos quadrados: troca com fade out e fade in lentos (1,5 s cada) */
+  var hintEl = document.getElementById("hint"), hintWant = null, hintTimer = null;
+  function setHint(t) {
+    if (t === hintWant) return;
+    var firstTime = hintWant === null;
+    hintWant = t;
+    clearTimeout(hintTimer);
+    if (firstTime || !hintEl.textContent) { hintEl.textContent = t; hintEl.classList.remove("out"); return; }
+    hintEl.classList.add("out");
+    hintTimer = setTimeout(function () { hintEl.textContent = hintWant; hintEl.classList.remove("out"); }, 1500);
   }
 
   /* Estrela no mesmo tamanho dos quadrados de cima, para a borda ter a mesma espessura */

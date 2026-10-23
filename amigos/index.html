@@ -1,0 +1,963 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Estrela Tarefas</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Estrela">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<meta name="theme-color" content="#ffffff">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,400;1,500&family=Jost:wght@300;400;500&display=swap">
+<style>
+html { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; font-size: 14px; }
+/* Layout: folha branca e silenciosa; serifa clássica para nomes, sans geométrica fina para rótulos; 8 colunas (tarefa + subtarefas embaixo), estrela pontilhada no pé */
+:root {
+  --paper: #ffffff;
+  --ink: #231f20;
+  --empty: #e8e8e8;
+  --task: #8f8d8e;
+  --sub: #c0c0c0;
+  --dots: #c9c6c6;
+  --muted: #77736f;
+  --overlay: rgba(255, 255, 255, 0.72);
+  --hair: #ecebea;
+  --serif: "Cormorant Garamond", "Cormorant", Garamond, "Times New Roman", serif;
+  --font: "Jost", "Futura", "Century Gothic", "Helvetica Neue", Arial, sans-serif;
+  --sq: 100px;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+  font-weight: 300;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+.page {
+  max-width: 900px;
+  margin: 0 auto;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding-block: 28px 36px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--hair);
+}
+h1 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(1.7rem, 4vw, 2.2rem);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+h1 em { font-style: italic; font-weight: 400; color: var(--task); }
+.meta {
+  display: flex;
+  gap: 18px;
+  align-items: baseline;
+  font-size: 0.66rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.meta strong { color: var(--ink); font-weight: 500; }
+.sync::before {
+  content: "";
+  display: inline-block;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  margin-right: 7px;
+  background: var(--sub);
+  vertical-align: 2px;
+}
+.sync.on::before { background: var(--ink); }
+
+/* Colunas: tarefa principal com subtarefas embaixo */
+.board {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  column-gap: 6px;
+  row-gap: 22px;
+  align-items: start;
+}
+@media (max-width: 620px) {
+  .board { grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: 8px; }
+}
+.col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--sq) * 0.1);
+  min-width: 0;
+}
+/* tarefa: miolo branco fixo (60% da coluna); borda fina de 10% que cresce para fora até 20% quando concluída */
+.sq {
+  position: relative;
+  width: calc(var(--sq) * 0.8);
+  margin-block: calc(var(--sq) * 0.1);
+  flex: none;
+  aspect-ratio: 1;
+  max-width: 100%;
+  background: var(--paper);
+  border: solid var(--empty);
+  border-width: calc(var(--sq) * 0.1);
+  font: inherit;
+  color: var(--ink);
+  padding: 0;
+  height: calc(var(--sq) * 0.8);
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  transition: border-color 0.35s, transform 0.12s;
+}
+.sq:hover { transform: translateY(-2px); }
+.sq:active { transform: translateY(0); }
+.sq:focus-visible, .plus:focus-visible { outline: 3px solid var(--task); outline-offset: 3px; }
+.sq.pending { border-color: var(--task); }
+.sq.done { border-color: var(--ink); border-width: calc(var(--sq) * 0.2); width: var(--sq); height: var(--sq); margin-block: 0; }
+/* subtarefa: mesmo miolo branco da tarefa (60% do quadrado), só a borda é mais fina */
+.sq.sub {
+  --sb: max(2px, calc(var(--sq) * 0.055));
+  border-width: var(--sb);
+  width: calc(var(--sq) * 0.6 + 2 * var(--sb));
+  height: calc(var(--sq) * 0.6 + 2 * var(--sb));
+  margin-block: 0;
+  border-color: var(--sub);
+}
+.sq.sub.done { border-color: var(--ink); }
+/* o texto ocupa todo o miolo branco; a letra é calculada para ficar o maior possível */
+.sq .t {
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.08;
+  position: absolute;
+  inset: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+/* sinal de mais: traço fino, quase um fio de cabelo, que gira suavemente ao passar o mouse */
+.cross { width: 46%; height: 46%; transition: transform 0.45s cubic-bezier(.2,.7,.2,1); }
+.cross line { stroke: var(--dots); stroke-width: 1.15; stroke-linecap: round; vector-effect: non-scaling-stroke; transition: stroke 0.3s; }
+.sq:hover .cross, .plus:hover .cross { transform: rotate(90deg); }
+.sq:hover .cross line, .plus:hover .cross line { stroke: var(--task); }
+.plus {
+  width: 45%;
+  aspect-ratio: 1;
+  max-width: 100%;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.plus .cross { width: 70%; height: 70%; }
+.hint {
+  margin: 0;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.08rem;
+  color: var(--muted);
+  text-align: center;
+  min-height: 1.2em;
+  transition: opacity 1.5s ease;
+}
+.hint.out { opacity: 0; }
+
+/* Estrela */
+.star-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding-block: 12px;
+}
+svg.star {
+  width: calc(var(--sq) * 690 / 188);
+  height: auto;
+  max-width: 100%;
+  overflow: visible;
+}
+.piece { cursor: pointer; outline: none; }
+.piece .outer, .piece .inner {
+  fill: none;
+  stroke: var(--dots);
+  stroke-width: 2.2;
+  stroke-dasharray: 9 6;
+}
+.piece .hit { fill: transparent; stroke: none; }
+.piece.done .outer, .piece.done .inner { stroke: none; }
+.piece:focus-visible .outer { stroke: var(--task); stroke-width: 4; stroke-dasharray: none; }
+/* peças concluídas: primeiro um fundo branco que esconde o pontilhado, depois todas as bordas pretas por cima */
+.cover { fill: var(--paper); pointer-events: none; }
+.ring { fill: var(--ink); fill-rule: evenodd; pointer-events: none; }
+@keyframes fadeout { from { opacity: 1; } to { opacity: 0; } }
+@keyframes shrink {
+  0% {
+    width: var(--sq); height: var(--sq);
+    border-width: calc(var(--sq) * 0.2); margin-block: 0;
+    border-color: var(--ink);
+  }
+  65% { border-color: var(--ink); }
+}
+@keyframes grow {
+  0% {
+    width: calc(var(--sq) * 0.8); height: calc(var(--sq) * 0.8);
+    border-width: calc(var(--sq) * 0.1); margin-block: calc(var(--sq) * 0.1);
+    border-color: var(--task);
+  }
+  35% { border-color: var(--ink); }
+}
+@keyframes ink { from { opacity: 0; } to { opacity: 1; } }
+.label { pointer-events: none; }
+.label div {
+  width: 100%; height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-family: var(--font);
+  font-size: 23px;
+  font-weight: 400;
+  line-height: 1.08;
+  color: var(--ink);
+  overflow: hidden;
+  overflow-wrap: normal;
+}
+
+.complete {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.complete p { margin: 0; font-family: var(--serif); font-style: italic; font-size: 1.7rem; font-weight: 400; }
+
+/* Botões */
+.btn {
+  font: inherit;
+  font-weight: 400;
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 15px 20px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+  transition: background-color 0.25s, color 0.25s;
+}
+.btn:hover { background: var(--paper); color: var(--ink); }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--sub); }
+.btn.ghost:hover { border-color: var(--ink); }
+.btn.link {
+  border: none; background: none; color: var(--muted);
+  padding: 6px 2px; font-size: 0.62rem;
+  text-decoration: underline; text-decoration-color: var(--sub); text-underline-offset: 5px;
+}
+.btn.link:hover { color: var(--ink); text-decoration-color: var(--ink); }
+.btn:focus-visible { outline: 1px solid var(--ink); outline-offset: 3px; }
+
+/* Pop-up */
+.overlay {
+  position: fixed; inset: 0;
+  background: var(--overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-block: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  z-index: 20;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.dialog {
+  width: min(100%, 420px);
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  box-shadow: 0 40px 80px -40px rgba(35, 31, 32, 0.35);
+  padding: 34px 30px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: rise 0.35s cubic-bezier(.2,.7,.2,1);
+}
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.dialog .eyebrow {
+  font-size: 0.62rem;
+  font-weight: 400;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.dialog h2 { margin: 0; font-family: var(--serif); font-size: 2rem; font-weight: 500; line-height: 1.05; text-wrap: balance; overflow-wrap: anywhere; }
+.dialog p { margin: 0; color: var(--muted); font-size: 0.92rem; line-height: 1.5; }
+.dialog ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.dialog li { display: flex; gap: 12px; align-items: center; overflow-wrap: anywhere; font-family: var(--serif); font-size: 1.15rem; font-weight: 500; }
+.dialog li::before {
+  content: ""; flex: none; width: 9px; height: 9px;
+  border: 1px solid var(--sub);
+}
+.dialog li.ok::before { border-color: var(--ink); background: var(--ink); }
+.dialog li.ok { text-decoration: line-through; color: var(--muted); }
+.dialog form { display: flex; flex-direction: column; gap: 22px; }
+.dialog input {
+  font-family: var(--serif);
+  font-size: 1.45rem;
+  font-weight: 500;
+  padding: 8px 0 10px;
+  border: none;
+  border-bottom: 1px solid var(--sub);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--ink);
+  width: 100%;
+  transition: border-color 0.25s;
+}
+.dialog input::placeholder { color: var(--sub); font-style: italic; font-weight: 400; }
+.dialog input:focus { outline: none; border-bottom-color: var(--ink); }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.actions .btn { flex: 1 1 auto; }
+.btn.addsub { display: flex; align-items: center; justify-content: center; gap: 10px; border-style: dashed; }
+.btn.addsub .cross { width: 13px; height: 13px; }
+.btn.addsub .cross line { stroke: currentColor; }
+.minor { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+@media (prefers-reduced-motion: reduce) {
+  .sq { transition: none; }
+  .dialog, .sq, .ring, .cover, .label { animation: none !important; }
+  .cross { transition: none; }
+}
+.sync { cursor: pointer; background: none; border: none; padding: 0; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; }
+.sync:hover { color: var(--ink); }
+.dialog a { color: var(--ink); text-underline-offset: 3px; }
+.dialog ol { margin: 0; padding-left: 18px; color: var(--muted); font-size: 0.88rem; line-height: 1.55; display: flex; flex-direction: column; gap: 4px; }
+.dialog input.mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.95rem; }
+.err { color: #9a3b2e; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<div class="page" lang="pt-BR">
+  <header>
+    <h1>Estrela <em>Tarefas</em></h1>
+    <div class="meta">
+      <span><strong id="count">0</strong> de 8 concluídas</span>
+      <button class="sync" id="sync" type="button" hidden>Conectando…</button>
+    </div>
+  </header>
+
+  <div class="board" id="board" aria-label="Tarefas"></div>
+  <p class="hint" id="hint"></p>
+
+  <div class="star-wrap">
+    <svg class="star" id="star" viewBox="-345 -345 690 690" role="img" aria-label="Estrela das tarefas concluídas"></svg>
+    <div class="complete" id="complete" hidden>
+      <p>Estrela completa</p>
+      <button class="btn" id="newStar" type="button">Começar nova estrela</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay" lang="pt-BR" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" id="dialog"></div>
+</div>
+
+<script>
+(function () {
+  var N = 8;
+  var DOC = "estrela/atual";
+  var LS = "estrela-amigos-estado";
+  var state = blank();
+  var history = [];
+  var cur = null;      /* {i, j} — j: índice da subtarefa, "new" para nova, null para a principal */
+  var mode = null;
+  var fresh = -1, freshAt = 0, undone = -1, undoneAt = 0, DUR = 2000;
+  /* animações de 2 s guiadas pelo relógio: se a tela for redesenhada no meio, continuam de onde estavam */
+  function anim(el, name, since, ease) {
+    el.style.animation = since < DUR ? name + " " + DUR + "ms " + (ease || "cubic-bezier(.22,.8,.2,1)") + " " + (-since) + "ms both" : "";
+  }
+  function unmark(i) { undone = i; undoneAt = Date.now(); setTimeout(render, DUR + 50); }
+
+  function blank() {
+    var s = [];
+    for (var i = 0; i < N; i++) s.push(emptySlot());
+    return { slots: s, startedAt: new Date().toISOString() };
+  }
+  function emptySlot() { return { text: "", status: "empty", doneAt: null, subs: [] }; }
+  function normalize(d) {
+    if (!d || !Array.isArray(d.slots)) return blank();
+    var out = blank();
+    out.startedAt = d.startedAt || out.startedAt;
+    for (var i = 0; i < N; i++) {
+      var s = d.slots[i] || {};
+      var st = s.status === "pending" || s.status === "done" ? s.status : "empty";
+      var subs = Array.isArray(s.subs) ? s.subs.filter(function (x) { return x && x.text; }).map(function (x) {
+        return { text: String(x.text), done: !!x.done, doneAt: x.doneAt || null };
+      }) : [];
+      out.slots[i] = { text: String(s.text || ""), status: st, doneAt: s.doneAt || null, subs: subs };
+      if (!out.slots[i].text) out.slots[i] = emptySlot();
+    }
+    return out;
+  }
+  /* Com subtarefas, a principal fica completa só quando todas estiverem prontas */
+  function settle(st, i) {
+    var s = st.slots[i];
+    if (!s.subs.length || s.status === "empty") return;
+    var all = s.subs.every(function (x) { return x.done; });
+    if (all && s.status !== "done") { s.status = "done"; s.doneAt = new Date().toISOString(); fresh = i; freshAt = Date.now(); }
+    if (!all && s.status === "done") { s.status = "pending"; s.doneAt = null; unmark(i); }
+  }
+
+  /* ---------- Desenho ---------- */
+  var board = document.getElementById("board");
+  var svg = document.getElementById("star");
+  var NS = "http://www.w3.org/2000/svg";
+  var R = 208, S = 188, SI = 111;
+  var CROSS = '<svg class="cross" viewBox="0 0 40 40" aria-hidden="true"><line x1="20" y1="4" x2="20" y2="36"/><line x1="4" y1="20" x2="36" y2="20"/></svg>';
+
+  function el(tag, attrs) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+  var gPieces = el("g", {}), gCover = el("g", {}), gRings = el("g", {}), gLabels = el("g", {});
+  [gPieces, gCover, gRings, gLabels].forEach(function (x) { svg.appendChild(x); });
+  var pieces = [], covers = [], rings = [], labels = [];
+  function ringPath(o) {
+    return "M" + (-o / 2) + " " + (-o / 2) + "h" + o + "v" + o + "h" + (-o) + "Z" +
+      "M" + (-SI / 2) + " " + (-SI / 2) + "h" + SI + "v" + SI + "h" + (-SI) + "Z";
+  }
+  var RING = ringPath(S);
+  /* peça da estrela: k=0 borda fina (metade) e transparente, k=1 borda cheia e opaca, igual ao quadrado de cima */
+  var THIN = SI + (S - SI) / 2, phase = [], ticking = false;
+  function setPiece(i, k) {
+    var o = THIN + (S - THIN) * k, op = k >= 1 ? "" : String(k);
+    rings[i].setAttribute("d", k >= 1 ? RING : ringPath(o));
+    covers[i].setAttribute("x", -o / 2); covers[i].setAttribute("y", -o / 2);
+    covers[i].setAttribute("width", o); covers[i].setAttribute("height", o);
+    covers[i].style.opacity = rings[i].style.opacity = labels[i].parentNode.style.opacity = op;
+  }
+  function tick() {
+    var now = Date.now(), active = false;
+    phase.forEach(function (ph, i) {
+      if (!ph) return;
+      var t = Math.min(1, (now - ph.start) / DUR), e = 1 - Math.pow(1 - t, 3);
+      setPiece(i, ph.dir > 0 ? e : 1 - e);
+      if (t < 1) active = true; else phase[i] = null;
+    });
+    ticking = active;
+    if (active) requestAnimationFrame(tick);
+  }
+  for (var j = 0; j < N; j++) {
+    var ang = (-90 + 45 * j) * Math.PI / 180;
+    var cx = R * Math.cos(ang), cy = R * Math.sin(ang), rot = -90 + 45 * j + 135;
+    var g = el("g", { "class": "piece", transform: "translate(" + cx + " " + cy + ") rotate(" + rot + ")", tabindex: "0", role: "button" });
+    g.appendChild(el("rect", { "class": "hit", x: -S / 2, y: -S / 2, width: S, height: S }));
+    g.appendChild(el("rect", { "class": "outer", x: -S / 2, y: -S / 2, width: S, height: S }));
+    g.appendChild(el("rect", { "class": "inner", x: -SI / 2, y: -SI / 2, width: SI, height: SI }));
+    g.addEventListener("click", open.bind(null, j, null));
+    g.addEventListener("keydown", (function (k) { return function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(k, null); } }; })(j));
+    gPieces.appendChild(g);
+    pieces.push(g);
+    var tf = "translate(" + cx + " " + cy + ") rotate(" + rot + ")";
+    var cv = el("rect", { "class": "cover", x: -S / 2, y: -S / 2, width: S, height: S, transform: tf });
+    var rg = el("path", { "class": "ring", d: RING, transform: tf });
+    gCover.appendChild(cv); gRings.appendChild(rg);
+    covers.push(cv); rings.push(rg);
+    var w = 80, h = 80, lr = R;
+    var fo = el("foreignObject", { "class": "label", x: lr * Math.cos(ang) - w / 2, y: lr * Math.sin(ang) - h / 2, width: w, height: h });
+    var div = document.createElement("div");
+    fo.appendChild(div);
+    gLabels.appendChild(fo);
+    labels.push(div);
+  }
+
+  function btn(cls, label, onClick, inner) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = cls;
+    b.setAttribute("aria-label", label);
+    b.innerHTML = inner;
+    b.addEventListener("click", onClick);
+    return b;
+  }
+  function textSpan(t) { var s = document.createElement("span"); s.className = "t"; s.textContent = t; return s; }
+
+  function render() {
+    board.innerHTML = "";
+    var done = 0, filled = 0, order = [];
+    state.slots.forEach(function (s, i) {
+      var col = document.createElement("div");
+      col.className = "col";
+      var main;
+      if (s.status === "empty") {
+        main = btn("sq", "Adicionar tarefa " + (i + 1), open.bind(null, i, null), CROSS);
+      } else {
+        main = btn("sq " + s.status, "Tarefa " + (i + 1) + ": " + s.text + (s.status === "done" ? " (concluída)" : ""), open.bind(null, i, null), "");
+        main.appendChild(textSpan(s.text));
+      }
+      main.id = "sq-" + i;
+      /* a borda cresce para fora ao concluir; se a tela for redesenhada no meio, a animação continua de onde estava */
+      var isDone = s.status === "done";
+      var sinceF = i === fresh && isDone ? Date.now() - freshAt : DUR;
+      var sinceU = i === undone && !isDone && s.status !== "empty" ? Date.now() - undoneAt : DUR;
+      if (sinceF < DUR) anim(main, "grow", sinceF);
+      else if (sinceU < DUR) anim(main, "shrink", sinceU);
+      col.appendChild(main);
+      if (s.status !== "empty") {
+        s.subs.forEach(function (x, k) {
+          var b = btn("sq sub" + (x.done ? " done" : ""), "Subtarefa: " + x.text + (x.done ? " (concluída)" : ""), open.bind(null, i, k), "");
+          b.id = "sub-" + i + "-" + k;
+          b.appendChild(textSpan(x.text));
+          col.appendChild(b);
+        });
+      }
+      board.appendChild(col);
+
+      var pc = pieces[i];
+      pc.setAttribute("class", "piece " + s.status);
+      var show = isDone || sinceU < DUR;
+      covers[i].style.display = rings[i].style.display = labels[i].parentNode.style.display = show ? "" : "none";
+      phase[i] = sinceF < DUR ? { dir: 1, start: Date.now() - sinceF } : sinceU < DUR ? { dir: -1, start: Date.now() - sinceU } : null;
+      if (!phase[i]) setPiece(i, 1);
+      pc.setAttribute("aria-label", "Peça " + (i + 1) + (s.status === "done" ? ": " + s.text : ""));
+      labels[i].textContent = show ? s.text : "";
+      labels[i].removeAttribute("data-text");
+      if (s.status === "done") { done++; order.push(i); }
+      if (s.status !== "empty") filled++;
+    });
+    if (!ticking && phase.some(Boolean)) { ticking = true; tick(); }
+    document.getElementById("count").textContent = done;
+    document.getElementById("complete").hidden = done < N;
+    setHint(filled === 0 ? "Toque em um quadrado para escrever a primeira tarefa." : done < N ? "Clique na tarefa para mais opções." : "");
+    size();
+    if (cur && mode !== "write") drawDialog(false);
+  }
+
+  /* Dica embaixo dos quadrados: troca com fade out e fade in lentos (1,5 s cada) */
+  var hintEl = document.getElementById("hint"), hintWant = null, hintTimer = null;
+  function setHint(t) {
+    if (t === hintWant) return;
+    var firstTime = hintWant === null;
+    hintWant = t;
+    clearTimeout(hintTimer);
+    if (firstTime || !hintEl.textContent) { hintEl.textContent = t; hintEl.classList.remove("out"); return; }
+    hintEl.classList.add("out");
+    hintTimer = setTimeout(function () { hintEl.textContent = hintWant; hintEl.classList.remove("out"); }, 1500);
+  }
+
+  /* Estrela no mesmo tamanho dos quadrados de cima, para a borda ter a mesma espessura */
+  function size() {
+    var first = board.firstElementChild;
+    if (!first) return;
+    var w = first.getBoundingClientRect().width;
+    if (w > 0) document.documentElement.style.setProperty("--sq", w + "px");
+    fit();
+  }
+  /* Palavras longas não quebram ao meio: a letra diminui até caber */
+  /* Separação silábica simples em português, usada só quando uma palavra longa deixaria a letra pequena demais */
+  var V = "aeiouáéíóúâêôãõàü";
+  var JOIN = ["ch", "lh", "nh", "br", "cr", "dr", "fr", "gr", "pr", "tr", "vr", "bl", "cl", "fl", "gl", "pl", "qu", "gu"];
+  function syll(w) {
+    if (w.length < 7) return w;
+    var lw = w.toLowerCase(), cuts = [];
+    function v(i) { return V.indexOf(lw[i]) >= 0; }
+    for (var i = 1; i < lw.length - 1; i++) {
+      if (!v(i) && v(i + 1)) {
+        if (v(i - 1)) cuts.push(i);
+        else if (!v(i - 1) && i >= 2) cuts.push(JOIN.indexOf(lw.substr(i - 1, 2)) >= 0 ? i - 1 : i);
+      }
+    }
+    var out = "", last = 0;
+    cuts.forEach(function (c) { if (c >= 3 && lw.length - c >= 3 && c > last) { out += w.slice(last, c) + "\u00AD"; last = c; } });
+    return out + w.slice(last);
+  }
+  function fit() {
+    var els = Array.prototype.slice.call(document.querySelectorAll(".sq .t")).concat(labels);
+    var sq = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sq")) || 100;
+    /* teto: o tamanho de "Aula segunda" no quadrado principal; subtarefas um pouco menores; estrela na mesma escala */
+    var CAP = 0.185, CAP_SUB = 0.135;
+    els.forEach(function (e) {
+      var cap = e.tagName === "DIV" ? CAP * 188 : (e.parentNode.classList.contains("sub") ? CAP_SUB : CAP) * sq;
+      var plain = e.getAttribute("data-text");
+      if (plain === null) { plain = e.textContent.replace(/\u00AD/g, ""); e.setAttribute("data-text", plain); }
+      if (!plain) return;
+      function best(text) {
+        e.textContent = text;
+        var lo = 5, hi = Math.max(6, Math.min(cap, e.clientHeight * 0.42));
+        function ok(fs) {
+          e.style.fontSize = fs + "px";
+          return e.scrollWidth <= e.clientWidth + 0.5 && e.scrollHeight <= e.clientHeight + 0.5;
+        }
+        if (ok(hi)) return hi;
+        for (var k = 0; k < 12; k++) { var mid = (lo + hi) / 2; if (ok(mid)) lo = mid; else hi = mid; }
+        return lo;
+      }
+      var a = best(plain);
+      var hy = plain.split(" ").map(syll).join(" ");
+      if (hy !== plain) {
+        var b = best(hy);
+        if (b > a * 1.15) { e.style.fontSize = b + "px"; return; }
+        e.textContent = plain;
+      }
+      e.style.fontSize = a + "px";
+    });
+  }
+  window.addEventListener("resize", size);
+
+  /* ---------- Pop-up ---------- */
+  var overlay = document.getElementById("overlay");
+  var dialog = document.getElementById("dialog");
+
+  function open(i, j) {
+    cur = { i: i, j: j };
+    var s = state.slots[i];
+    if (j === "new") mode = "write";
+    else if (j === null) mode = s.status === "empty" ? "write" : s.status === "pending" ? "ask" : "done";
+    else mode = s.subs[j] && s.subs[j].done ? "done" : "ask";
+    drawDialog(true);
+    overlay.hidden = false;
+  }
+  function close() {
+    overlay.hidden = true;
+    cur = null; mode = null;
+    dialog.innerHTML = "";
+  }
+  function esc(t) { var d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
+  function fmt(iso) {
+    try { return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }); } catch (e) { return ""; }
+  }
+  function item() {
+    var s = state.slots[cur.i];
+    if (cur.j === null) return s;
+    if (cur.j === "new") return null;
+    return s.subs[cur.j] || null;
+  }
+
+  var ADDSUB = '<button class="btn ghost addsub" type="button" data-a="addSub">' + CROSS + 'Adicionar subtarefa</button>';
+  function drawDialog(focus) {
+    var i = cur.i, s = state.slots[i], isSub = cur.j !== null, it = item();
+    if (isSub && cur.j !== "new" && !it) return close();
+    var head = '<div class="eyebrow">' + (isSub ? "Subtarefa de " + esc(s.text) : "Tarefa " + (i + 1)) + '</div>';
+    var html = "";
+    if (mode === "write") {
+      var val = cur.j === "new" ? "" : it.text;
+      var title = cur.j === "new" ? "Nova subtarefa" : val ? (isSub ? "Editar subtarefa" : "Editar tarefa") : "Nova tarefa";
+      html = head + '<h2>' + title + '</h2>' +
+        '<form id="taskForm"><input id="taskInput" maxlength="60" autocomplete="off" placeholder="' + (isSub ? "Ex.: ver preço na farmácia" : "Ex.: comprar desodorante") + '" value="' + esc(val).replace(/"/g, "&quot;") + '">' +
+        '<div class="actions"><button class="btn ghost" type="button" data-a="cancel">Cancelar</button>' +
+        '<button class="btn" type="submit">Salvar</button></div></form>';
+    } else if (!isSub && mode === "ask" && s.subs.length) {
+      var ok = s.subs.filter(function (x) { return x.done; }).length;
+      html = head + '<h2>' + esc(s.text) + '</h2>' +
+        '<p>' + ok + ' de ' + s.subs.length + ' subtarefas concluídas. Ela fica completa quando todas estiverem prontas.</p>' +
+        '<ul>' + s.subs.map(function (x) { return '<li class="' + (x.done ? "ok" : "") + '">' + esc(x.text) + '</li>'; }).join("") + '</ul>' +
+        '<div class="actions"><button class="btn ghost" type="button" data-a="cancel">Fechar</button>' +
+        '<button class="btn" type="button" data-a="completeAll">Concluir tudo</button></div>' + ADDSUB +
+        '<div class="minor"><button class="btn link" type="button" data-a="edit">Editar texto</button>' +
+        '<button class="btn link" type="button" data-a="clear">Apagar tarefa</button></div>';
+    } else if (mode === "ask") {
+      html = head + '<h2>' + esc(it.text) + '</h2><p>Você completou esta ' + (isSub ? "subtarefa" : "tarefa") + '?</p>' +
+        '<div class="actions"><button class="btn ghost" type="button" data-a="cancel">Ainda não</button>' +
+        '<button class="btn" type="button" data-a="complete">Sim, completei</button></div>' + (isSub ? "" : ADDSUB) +
+        '<div class="minor"><button class="btn link" type="button" data-a="edit">Editar texto</button>' +
+        '<button class="btn link" type="button" data-a="clear">Apagar ' + (isSub ? "subtarefa" : "tarefa") + '</button></div>';
+    } else if (mode === "done") {
+      var canUndo = isSub || !s.subs.length;
+      html = head + '<h2>' + esc(it.text) + '</h2><p>Concluída' + (it.doneAt ? " em " + fmt(it.doneAt) : "") + '.' +
+        (canUndo ? "" : " Para reabrir, desfaça uma das subtarefas.") + '</p>' +
+        '<div class="actions">' + (canUndo ? '<button class="btn ghost" type="button" data-a="undo">Desfazer conclusão</button>' : "") +
+        '<button class="btn" type="button" data-a="cancel">Fechar</button></div>' + (isSub ? "" : ADDSUB) +
+        (isSub ? '<div class="minor"><button class="btn link" type="button" data-a="clear">Apagar subtarefa</button></div>' : "");
+    } else if (mode === "confirmClear") {
+      html = head + '<h2>Apagar "' + esc(it.text) + '"?</h2><p>' +
+        (isSub ? "A subtarefa sai da lista." : s.subs.length ? "O quadrado volta a ficar vazio e as subtarefas também são apagadas." : "O quadrado volta a ficar vazio.") + '</p>' +
+        '<div class="actions"><button class="btn ghost" type="button" data-a="back">Voltar</button>' +
+        '<button class="btn" type="button" data-a="clearYes">Apagar</button></div>';
+    }
+    dialog.innerHTML = html;
+    if (mode === "write") {
+      var inp = document.getElementById("taskInput");
+      if (focus) setTimeout(function () { try { inp.focus(); inp.select(); } catch (e) {} }, 30);
+      document.getElementById("taskForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var v = inp.value.trim();
+        if (!v) { inp.focus(); return; }
+        var c = cur;
+        change(function (st) {
+          var sl = st.slots[c.i];
+          if (c.j === "new") { sl.subs.push({ text: v, done: false, doneAt: null }); settle(st, c.i); }
+          else if (c.j === null) { sl.text = v; if (sl.status === "empty") sl.status = "pending"; }
+          else sl.subs[c.j].text = v;
+        });
+        close();
+      });
+    } else if (focus) {
+      setTimeout(function () { try { dialog.querySelector('[data-a="complete"],[data-a="completeAll"],[data-a="cancel"]').focus(); } catch (e) {} }, 30);
+    }
+  }
+
+  dialog.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-a]");
+    if (!b || !cur) return;
+    var a = b.getAttribute("data-a"), c = cur;
+    var now = new Date().toISOString();
+    if (a === "cancel") return close();
+    if (a === "edit") { mode = "write"; return drawDialog(true); }
+    if (a === "addSub") { cur = { i: c.i, j: "new" }; mode = "write"; return drawDialog(true); }
+    if (a === "clear") { mode = "confirmClear"; return drawDialog(true); }
+    if (a === "back") { mode = state.slots[c.i].status === "done" || (c.j !== null && item() && item().done) ? "done" : "ask"; return drawDialog(true); }
+    if (a === "complete") {
+      change(function (st) {
+        var sl = st.slots[c.i];
+        if (c.j === null) { sl.status = "done"; sl.doneAt = now; fresh = c.i; freshAt = Date.now(); }
+        else { sl.subs[c.j].done = true; sl.subs[c.j].doneAt = now; settle(st, c.i); }
+      });
+      return close();
+    }
+    if (a === "completeAll") {
+      change(function (st) {
+        st.slots[c.i].subs.forEach(function (x) { if (!x.done) { x.done = true; x.doneAt = now; } });
+        settle(st, c.i);
+      });
+      return close();
+    }
+    if (a === "undo") {
+      change(function (st) {
+        var sl = st.slots[c.i];
+        if (c.j === null) { sl.status = "pending"; sl.doneAt = null; unmark(c.i); }
+        else { sl.subs[c.j].done = false; sl.subs[c.j].doneAt = null; settle(st, c.i); }
+      });
+      return close();
+    }
+    if (a === "clearYes") {
+      change(function (st) {
+        if (c.j === null) st.slots[c.i] = emptySlot();
+        else { st.slots[c.i].subs.splice(c.j, 1); settle(st, c.i); }
+      });
+      return close();
+    }
+  });
+  overlay.addEventListener("click", function (e) { if (e.target === overlay) close(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !overlay.hidden) close(); });
+
+  document.getElementById("newStar").addEventListener("click", function () {
+    var finished = JSON.parse(JSON.stringify(state));
+    finished.completedAt = new Date().toISOString();
+    history.push(finished);
+    fresh = -1; undone = -1;
+    change(function () { return blank(); });
+  });
+
+  /* ---------- Dados e sincronização ---------- */
+  var writing = Promise.resolve();
+  function change(fn) {
+    var next = JSON.parse(JSON.stringify(state));
+    var r = fn(next);
+    state = normalize(r || next);
+    render();
+    save();
+  }
+  /* ---------- Sincronização por um Gist secreto no GitHub ---------- */
+  var KEY_TOKEN = "estrela-gh-token", KEY_GIST = "estrela-gh-gist", KEY_HIST = "estrela-amigos-historico";
+  var FILE = "estrela-tarefas.json", DESC = "Estrela Tarefas: dados (não apagar)";
+  /* versão para compartilhar: sem sincronização, tudo fica salvo só no aparelho de quem usa */
+  var token = null, gistId = null;
+  var stamp = null, dirty = false, saving = false, pushTimer = null, online = false;
+
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
+
+  function api(path, method, body) {
+    return fetch("https://api.github.com" + path, {
+      method: method || "GET",
+      cache: "no-store",
+      headers: { Authorization: "Bearer " + token, Accept: "application/vnd.github+json" },
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (r) {
+      if (!r.ok) { var e = new Error("http " + r.status); e.status = r.status; throw e; }
+      return r.json();
+    });
+  }
+  function payload() { return { current: state, history: history, updatedAt: stamp }; }
+
+  function findOrCreate() {
+    if (gistId) return Promise.resolve(gistId);
+    return api("/gists?per_page=100").then(function (list) {
+      var g = list.filter(function (x) { return x.description === DESC && x.files[FILE]; })[0];
+      if (g) return g.id;
+      stamp = new Date().toISOString();
+      var files = {}; files[FILE] = { content: JSON.stringify(payload(), null, 1) };
+      return api("/gists", "POST", { description: DESC, public: false, files: files }).then(function (g) { return g.id; });
+    }).then(function (id) { gistId = id; lsSet(KEY_GIST, id); return id; });
+  }
+
+  function pull() {
+    if (!token || !gistId || dirty || saving) return Promise.resolve();
+    return api("/gists/" + gistId).then(function (g) {
+      var f = g.files[FILE];
+      if (!f) return;
+      var text = f.truncated ? fetch(f.raw_url, { cache: "no-store" }).then(function (r) { return r.text(); }) : Promise.resolve(f.content);
+      return text.then(function (t) {
+        if (dirty || saving) return;
+        var d = JSON.parse(t);
+        if (d.updatedAt && d.updatedAt !== stamp) {
+          stamp = d.updatedAt;
+          state = normalize(d.current);
+          history = Array.isArray(d.history) ? d.history : [];
+          cache();
+          render();
+        }
+        online = true;
+        setSync(true, "Sincronizado");
+      });
+    }).catch(fail);
+  }
+
+  function push() {
+    if (!token || !gistId) return;
+    if (saving) { dirty = true; return; }
+    saving = true; dirty = false;
+    stamp = new Date().toISOString();
+    var files = {}; files[FILE] = { content: JSON.stringify(payload(), null, 1) };
+    setSync(true, "Salvando…");
+    api("/gists/" + gistId, "PATCH", { files: files }).then(function () {
+      saving = false;
+      if (dirty) return push();
+      online = true;
+      setSync(true, "Sincronizado");
+    }).catch(function (e) { saving = false; dirty = true; fail(e); });
+  }
+
+  function fail(e) {
+    online = false;
+    if (e && (e.status === 401 || e.status === 403)) setSync(false, "Chave inválida, toque aqui");
+    else if (e && e.status === 404) { gistId = null; lsSet(KEY_GIST, null); setSync(false, "Dados não encontrados, toque aqui"); }
+    else setSync(false, "Sem conexão, tentando de novo");
+  }
+
+  function cache() {
+    lsSet(LS, JSON.stringify(state));
+    lsSet(KEY_HIST, JSON.stringify(history));
+  }
+  function save() {
+    cache();
+    if (!token) return;
+    dirty = true;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(function () { pushTimer = null; dirty = false; push(); }, 600);
+  }
+  function setSync(on, text) {
+    var s = document.getElementById("sync");
+    s.className = "sync" + (on ? " on" : "");
+    s.textContent = text;
+  }
+
+  function connect(t) {
+    token = t; lsSet(KEY_TOKEN, t);
+    setSync(false, "Conectando…");
+    return findOrCreate().then(function () { stamp = null; return pull(); });
+  }
+
+  /* Tela de conexão */
+  function openSync(error) {
+    cur = null; mode = "sync";
+    var connected = !!token;
+    dialog.innerHTML =
+      '<div class="eyebrow">Sincronização</div>' +
+      '<h2>' + (connected ? "Conectado ao GitHub" : "Sincronizar aparelhos") + '</h2>' +
+      (connected
+        ? '<p>As tarefas ficam salvas num Gist secreto da sua conta do GitHub e aparecem em todos os aparelhos conectados com a mesma chave.</p>' +
+          '<div class="actions"><button class="btn ghost" type="button" data-s="off">Desconectar este aparelho</button>' +
+          '<button class="btn" type="button" data-s="close">Fechar</button></div>'
+        : '<ol><li>Abra <a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=Estrela%20Tarefas" target="_blank" rel="noopener">esta página do GitHub</a>.</li>' +
+          '<li>Em "Expiration", escolha "No expiration". Deixe marcado só "gist".</li>' +
+          '<li>Clique em "Generate token", copie a chave e cole aqui.</li>' +
+          '<li>Nos outros aparelhos, cole a mesma chave.</li></ol>' +
+          '<form id="syncForm"><input id="tokenInput" class="mono" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ghp_...">' +
+          (error ? '<p class="err">' + esc(error) + '</p>' : "") +
+          '<div class="actions"><button class="btn ghost" type="button" data-s="close">Agora não</button>' +
+          '<button class="btn" type="submit">Conectar</button></div></form>');
+    overlay.hidden = false;
+    var form = document.getElementById("syncForm");
+    if (form) form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var t = document.getElementById("tokenInput").value.trim();
+      if (!t) return;
+      connect(t).then(function () {
+        if (token) close();
+      }).catch(function (err) {
+        token = null; lsSet(KEY_TOKEN, null);
+        setSync(false, "Só neste aparelho");
+        openSync(err && err.status === 401 ? "Essa chave não funcionou. Confira se copiou inteira." : "Não consegui conectar. Confira a chave e a internet.");
+      });
+    });
+  }
+  dialog.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-s]");
+    if (!b) return;
+    if (b.getAttribute("data-s") === "off") {
+      token = null; gistId = null; lsSet(KEY_TOKEN, null); lsSet(KEY_GIST, null);
+      setSync(false, "Só neste aparelho");
+    }
+    close();
+  });
+  document.getElementById("sync").addEventListener("click", function () { openSync(); });
+
+  try { var cached = lsGet(LS); if (cached) state = normalize(JSON.parse(cached)); } catch (e) {}
+  try { var h = lsGet(KEY_HIST); if (h) history = JSON.parse(h) || []; } catch (e) {}
+  render();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(size);
+
+  if (token) {
+    setSync(false, "Conectando…");
+    findOrCreate().then(pull).catch(fail);
+  } else {
+    setSync(false, "Só neste aparelho, toque para sincronizar");
+  }
+  setInterval(function () { if (!document.hidden) { if (dirty && !saving && !pushTimer) push(); pull(); } }, 15000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) pull(); });
+  window.addEventListener("focus", function () { pull(); });
+
+})();
+</script>
+</body>
+</html>
