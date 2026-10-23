@@ -194,7 +194,7 @@ h1 em { font-style: italic; font-weight: 400; color: var(--task); }
   min-height: 1.2em;
   transition: opacity 1.5s ease;
 }
-.hint.out { opacity: 0; }
+.hint.out { opacity: 0; transition-duration: 0.5s; }
 
 /* Estrela */
 .star-wrap {
@@ -572,7 +572,7 @@ svg.star {
     if (cur && mode !== "write") drawDialog(false);
   }
 
-  /* Dica embaixo dos quadrados: troca com fade out e fade in lentos (1,5 s cada) */
+  /* Dica embaixo dos quadrados: fade out rápido (0,5 s) e, logo em seguida, fade in lento (1,5 s) */
   var hintEl = document.getElementById("hint"), hintWant = null, hintTimer = null;
   function setHint(t) {
     if (t === hintWant) return;
@@ -581,7 +581,7 @@ svg.star {
     clearTimeout(hintTimer);
     if (firstTime || !hintEl.textContent) { hintEl.textContent = t; hintEl.classList.remove("out"); return; }
     hintEl.classList.add("out");
-    hintTimer = setTimeout(function () { hintEl.textContent = hintWant; hintEl.classList.remove("out"); }, 1500);
+    hintTimer = setTimeout(function () { hintEl.textContent = hintWant; hintEl.classList.remove("out"); }, 500);
   }
 
   /* Estrela no mesmo tamanho dos quadrados de cima, para a borda ter a mesma espessura */
